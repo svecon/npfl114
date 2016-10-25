@@ -26,15 +26,23 @@ class Network:
         else:
             self.summary_writer = None
 
-    def construct(self, hidden_layer_size):
+    def construct(self, hidden_layer_size, input_dropout_prob, hidden_dropout_prob):
         with self.session.graph.as_default():
             with tf.name_scope("inputs"):
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
                 self.labels = tf.placeholder(tf.int64, [None], name="labels")
 
             flattened_images = tf_layers.flatten(self.images, scope="preprocessing")
-            hidden_layer = tf_layers.fully_connected(flattened_images, num_outputs=hidden_layer_size, activation_fn=tf.nn.relu, scope="hidden_layer")
-            output_layer = tf_layers.fully_connected(hidden_layer, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
+
+            input_layer_dropout_rate = tf.placeholder(tf.float32)
+            input_layer_dropout = tf.nn.dropout(flattened_images, input_layer_dropout_rate)
+            
+            hidden_layer = tf_layers.fully_connected(input_layer_dropout, num_outputs=hidden_layer_size, activation_fn=tf.nn.relu, scope="hidden_layer")
+            
+            hidden_layer_dropout_rate = tf.placeholder(tf.float32)
+            hidden_layer_dropout = tf.nn.dropout(hidden_layer, hidden_layer_dropout_rate)
+            
+            output_layer = tf_layers.fully_connected(hidden_layer_dropout, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
             self.predictions = tf.argmax(output_layer, 1)
 
             loss = tf_losses.sparse_softmax_cross_entropy(output_layer, self.labels, scope="loss")
@@ -108,17 +116,21 @@ if __name__ == "__main__":
 
     # Load the data
     from tensorflow.examples.tutorials.mnist import input_data
-    mnist = input_data.read_data_sets("mnist_data/", reshape=False)
+    
+    for input_dropout_prob in (0.5,0.7,0.8,0.9,1):
+        for hidden_dropout_prob in (0.3,0.4,0.5,0.6,1):
 
-    # Construct the network
-    network = Network(threads=args.threads, logdir=args.logdir, expname=args.exp)
-    network.construct(100)
+            mnist = input_data.read_data_sets("mnist_data/", reshape=False)
 
-    # Train
-    for i in range(args.epochs):
-        while mnist.train.epochs_completed == i:
-            images, labels = mnist.train.next_batch(args.batch_size)
-            network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
+            # Construct the network
+            network = Network(threads=args.threads, logdir=args.logdir, expname='{}_idp={}_hdp={}'.format(args.exp, input_dropout_prob, hidden_dropout_prob))
+            network.construct(100, input_dropout_prob, hidden_dropout_prob)
 
-        network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
-        network.evaluate("test", mnist.test.images, mnist.test.labels, True)
+            # Train
+            for i in range(args.epochs):
+                while mnist.train.epochs_completed == i:
+                    images, labels = mnist.train.next_batch(args.batch_size)
+                    network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
+
+                network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
+                network.evaluate("test", mnist.test.images, mnist.test.labels, True)
