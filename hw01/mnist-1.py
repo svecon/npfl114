@@ -26,14 +26,19 @@ class Network:
         else:
             self.summary_writer = None
 
-    def construct(self, hidden_layer_size):
+    def construct(self, hidden_layer_sizes, activation_fn=tf.tanh):
         with self.session.graph.as_default():
             with tf.name_scope("inputs"):
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
                 self.labels = tf.placeholder(tf.int64, [None], name="labels")
 
             flattened_images = tf_layers.flatten(self.images, scope="preprocessing")
-            hidden_layer = tf_layers.fully_connected(flattened_images, num_outputs=hidden_layer_size, activation_fn=tf.nn.relu, scope="hidden_layer")
+            # hidden_layer = tf_layers.fully_connected(flattened_images, num_outputs=hidden_layer_size, activation_fn=tf.nn.relu, scope="hidden_layer")
+
+            hidden_layer = flattened_images
+            for i,hidden_layer_size in enumerate(hidden_layer_sizes):
+                hidden_layer = tf_layers.fully_connected(hidden_layer, num_outputs=hidden_layer_size, activation_fn=tf.nn.relu, scope="hidden_layer_{}".format(i))
+
             output_layer = tf_layers.fully_connected(hidden_layer, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
             self.predictions = tf.argmax(output_layer, 1)
 
@@ -108,17 +113,24 @@ if __name__ == "__main__":
 
     # Load the data
     from tensorflow.examples.tutorials.mnist import input_data
-    mnist = input_data.read_data_sets("mnist_data/", reshape=False)
 
-    # Construct the network
-    network = Network(threads=args.threads, logdir=args.logdir, expname=args.exp)
-    network.construct(100)
+    for activationFn in [tf.nn.relu, tf.tanh]:
+        for numberOfHidden in [(100,),(200,100),(300,200,100)]:
 
-    # Train
-    for i in range(args.epochs):
-        while mnist.train.epochs_completed == i:
-            images, labels = mnist.train.next_batch(args.batch_size)
-            network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
+            mnist = input_data.read_data_sets("mnist_data/", reshape=False)
 
-        network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
-        network.evaluate("test", mnist.test.images, mnist.test.labels, True)
+            # Construct the network
+            network = Network(
+                threads=args.threads,
+                logdir=args.logdir,                 
+                expname='{}_{}_{}'.format(args.exp, activationFn, numberOfHidden))
+            network.construct(numberOfHidden, activation_fn=activationFn)
+
+            # Train
+            for i in range(args.epochs):
+                while mnist.train.epochs_completed == i:
+                    images, labels = mnist.train.next_batch(args.batch_size)
+                    network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
+
+                network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
+                network.evaluate("test", mnist.test.images, mnist.test.labels, True)
