@@ -26,7 +26,7 @@ class Network:
         else:
             self.summary_writer = None
 
-    def construct(self, hidden_layer_size):
+    def construct(self, hidden_layer_size, optimiser_func, optimiser_params):
         with self.session.graph.as_default():
             with tf.name_scope("inputs"):
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
@@ -39,7 +39,28 @@ class Network:
 
             loss = tf_losses.sparse_softmax_cross_entropy(output_layer, self.labels, scope="loss")
             self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
-            self.training = tf.train.AdamOptimizer().minimize(loss, global_step=self.global_step)
+
+            if optimiser_func == 'GradientDescentOptimizer':
+                # tf.train.GradientDescentOptimizer.__init__(learning_rate, use_locking=False, name='GradientDescent')
+                optimiser = tf.train.GradientDescentOptimizer(learning_rate=optimiser_params)
+            
+            elif optimiser_func == 'exponential_decay':
+                # tf.train.exponential_decay(learning_rate, global_step, decay_steps, decay_rate, staircase=False, name=None)
+                learning_rate = tf.train.exponential_decay(learning_rate=optimiser_params[0], self.global_step, 10000, 0.96)
+                optimiser = tf.train.GradientDescentOptimizer(learning_rate=max(learning_rate, optimiser_params[1]))
+            
+            elif optimiser_func == 'MomentumOptimizer':
+                # tf.train.MomentumOptimizer.__init__(learning_rate, momentum, use_locking=False, name='Momentum', use_nesterov=False)
+                optimiser = tf.train.MomentumOptimizer(learning_rate=optimiser_params, momentum=0.9)
+            
+            elif optimiser_func == 'AdamOptimizer':
+                # tf.train.AdamOptimizer.__init__(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-08, use_locking=False, name='Adam')
+                optimiser = tf.train.AdamOptimizer(learning_rate=optimiser_params)
+            
+            else:
+                raise ValueError('Unexpected optimiser function.')
+
+            self.training = optimiser.minimize(loss, global_step=self.global_step)
             self.accuracy = tf_metrics.accuracy(self.predictions, self.labels)
 
             # Summaries
@@ -99,26 +120,36 @@ if __name__ == "__main__":
     # Parse arguments
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=20, type=int, help="Number of epochs.")
     parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
-    parser.add_argument("--exp", default="4-mnist-using-contrib", type=str, help="Experiment name.")
+    parser.add_argument("--exp", default="1-mnist-opt", type=str, help="Experiment name.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
 
     # Load the data
     from tensorflow.examples.tutorials.mnist import input_data
-    mnist = input_data.read_data_sets("mnist_data/", reshape=False)
 
-    # Construct the network
-    network = Network(threads=args.threads, logdir=args.logdir, expname=args.exp)
-    network.construct(100)
+    optimiserParams = {
+        'GradientDescentOptimizer': (0.01,0.001,0.0001),
+        'exponential_decay':  [(0.01,0.001), (0.01,0.0001), (0.001,0.0001)],
+        'MomentumOptimizer': (0.01,0.001,0.0001),
+        'AdamOptimizer': (0.002,0.001,0.0005),
+    }
 
-    # Train
-    for i in range(args.epochs):
-        while mnist.train.epochs_completed == i:
-            images, labels = mnist.train.next_batch(args.batch_size)
-            network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
+    for batch_size in [1, 10, 50]:
+        for optimiser, params in optimiserParams.items():
+            for param in params:
+                mnist = input_data.read_data_sets("mnist_data/", reshape=False)
 
-        network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
-        network.evaluate("test", mnist.test.images, mnist.test.labels, True)
+                # Construct the network
+                network = Network(threads=args.threads, logdir=args.logdir, expname='{}_bs={}_opt={}_lr={}'.format(args.exp, batch_size, optimiser, param))
+                network.construct(100, optimiser, param)
+
+                # Train
+                for i in range(args.epochs):
+                    while mnist.train.epochs_completed == i:
+                        images, labels = mnist.train.next_batch(batch_size)
+                        network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
+
+                    network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
+                    network.evaluate("test", mnist.test.images, mnist.test.labels, True)
