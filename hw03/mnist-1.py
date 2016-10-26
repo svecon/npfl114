@@ -26,7 +26,7 @@ class Network:
         else:
             self.summary_writer = None
 
-    def construct(self, hidden_layer_size, input_dropout_prob, hidden_dropout_prob):
+    def construct(self, hidden_layer_size):
         with self.session.graph.as_default():
             with tf.name_scope("inputs"):
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
@@ -34,13 +34,13 @@ class Network:
 
             flattened_images = tf_layers.flatten(self.images, scope="preprocessing")
 
-            input_layer_dropout_rate = tf.placeholder(tf.float32)
-            input_layer_dropout = tf.nn.dropout(flattened_images, input_layer_dropout_rate)
+            self.input_layer_dropout_rate = tf.placeholder(tf.float32)
+            input_layer_dropout = tf.nn.dropout(flattened_images, self.input_layer_dropout_rate)
             
             hidden_layer = tf_layers.fully_connected(input_layer_dropout, num_outputs=hidden_layer_size, activation_fn=tf.nn.relu, scope="hidden_layer")
             
-            hidden_layer_dropout_rate = tf.placeholder(tf.float32)
-            hidden_layer_dropout = tf.nn.dropout(hidden_layer, hidden_layer_dropout_rate)
+            self.hidden_layer_dropout_rate = tf.placeholder(tf.float32)
+            hidden_layer_dropout = tf.nn.dropout(hidden_layer, self.hidden_layer_dropout_rate)
             
             output_layer = tf_layers.fully_connected(hidden_layer_dropout, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
             self.predictions = tf.argmax(output_layer, 1)
@@ -68,11 +68,16 @@ class Network:
     def training_step(self):
         return self.session.run(self.global_step)
 
-    def train(self, images, labels, summaries=False, run_metadata=False):
+    def train(self, images, labels, input_dropout_prob, hidden_dropout_prob, summaries=False, run_metadata=False):
         if (summaries or run_metadata) and not self.summary_writer:
             raise ValueError("Logdir is required for summaries or run_metadata.")
 
-        args = {"feed_dict": {self.images: images, self.labels: labels}}
+        args = {"feed_dict": {
+                self.images: images,
+                self.labels: labels,
+                self.input_layer_dropout_rate: input_dropout_prob,
+                self.hidden_layer_dropout_rate: hidden_dropout_prob,
+        }}
         targets = [self.training]
         if summaries:
             targets.append(self.summaries["training"])
@@ -94,7 +99,7 @@ class Network:
         if summaries:
             targets.append(self.summaries[dataset])
 
-        results = self.session.run(targets, {self.images: images, self.labels: labels})
+        results = self.session.run(targets, {self.images: images, self.labels: labels, self.input_layer_dropout_rate: 1, self.hidden_layer_dropout_rate: 1})
         if summaries:
             self.summary_writer.add_summary(results[-1], self.training_step)
         return results[0]
@@ -124,13 +129,13 @@ if __name__ == "__main__":
 
             # Construct the network
             network = Network(threads=args.threads, logdir=args.logdir, expname='{}_idp={}_hdp={}'.format(args.exp, input_dropout_prob, hidden_dropout_prob))
-            network.construct(100, input_dropout_prob, hidden_dropout_prob)
+            network.construct(100)
 
             # Train
             for i in range(args.epochs):
                 while mnist.train.epochs_completed == i:
                     images, labels = mnist.train.next_batch(args.batch_size)
-                    network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
+                    network.train(images, labels, input_dropout_prob, hidden_dropout_prob, network.training_step % 100 == 0, network.training_step == 0)
 
                 network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
                 network.evaluate("test", mnist.test.images, mnist.test.labels, True)
