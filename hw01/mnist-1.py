@@ -114,6 +114,8 @@ if __name__ == "__main__":
     # Load the data
     from tensorflow.examples.tutorials.mnist import input_data
 
+    bestNetwork = None
+    bestNetworkAccuracy = 0
     for activationFn in [tf.nn.relu, tf.tanh]:
         for numberOfHidden in [(100,),(200,100),(300,200,100)]:
 
@@ -122,7 +124,7 @@ if __name__ == "__main__":
             # Construct the network
             network = Network(
                 threads=args.threads,
-                logdir=args.logdir,                 
+                logdir=args.logdir,
                 expname='{}_{}_{}'.format(args.exp, activationFn, numberOfHidden))
             network.construct(numberOfHidden, activation_fn=activationFn)
 
@@ -132,5 +134,12 @@ if __name__ == "__main__":
                     images, labels = mnist.train.next_batch(args.batch_size)
                     network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
 
-                network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
-                network.evaluate("test", mnist.test.images, mnist.test.labels, True)
+                accuracy = network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
+                if accuracy > bestNetworkAccuracy:
+                	bestNetworkAccuracy = accuracy
+                	bestNetwork = network
+
+    print('Best hyperparams are: activation={} hidden={}'.format(activationFn, numberOfHidden)
+    print('Validation accuracy: {}', bestNetworkAccuracy)
+    testAccuracy = bestNetwork.evaluate("test", mnist.test.images, mnist.test.labels, True)
+    print('Test accuracy: {}', testAccuracy)
