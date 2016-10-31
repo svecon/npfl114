@@ -26,7 +26,7 @@ class Network:
         else:
             self.summary_writer = None
 
-    def construct(self, hidden_layer_size, optimiser_func, optimiser_params):
+    def construct(self, hidden_layer_size, optimiser_func, optimiser_params, max_steps):
         with self.session.graph.as_default():
             with tf.name_scope("inputs"):
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
@@ -43,20 +43,20 @@ class Network:
             if optimiser_func == 'GradientDescentOptimizer':
                 # tf.train.GradientDescentOptimizer.__init__(learning_rate, use_locking=False, name='GradientDescent')
                 optimiser = tf.train.GradientDescentOptimizer(learning_rate=optimiser_params)
-            
+
             elif optimiser_func == 'exponential_decay':
                 # tf.train.exponential_decay(learning_rate, global_step, decay_steps, decay_rate, staircase=False, name=None)
-                learning_rate = tf.train.exponential_decay(learning_rate=optimiser_params[0], self.global_step, 10000, 0.96)
-                optimiser = tf.train.GradientDescentOptimizer(learning_rate=max(learning_rate, optimiser_params[1]))
-            
+                learning_rate = tf.train.exponential_decay(learning_rate=optimiser_params[0], self.global_step, max_steps, optimiser_params[1]/optimiser_params[0])
+                optimiser = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+
             elif optimiser_func == 'MomentumOptimizer':
                 # tf.train.MomentumOptimizer.__init__(learning_rate, momentum, use_locking=False, name='Momentum', use_nesterov=False)
                 optimiser = tf.train.MomentumOptimizer(learning_rate=optimiser_params, momentum=0.9)
-            
+
             elif optimiser_func == 'AdamOptimizer':
                 # tf.train.AdamOptimizer.__init__(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-08, use_locking=False, name='Adam')
                 optimiser = tf.train.AdamOptimizer(learning_rate=optimiser_params)
-            
+
             else:
                 raise ValueError('Unexpected optimiser function.')
 
@@ -143,7 +143,7 @@ if __name__ == "__main__":
 
                 # Construct the network
                 network = Network(threads=args.threads, logdir=args.logdir, expname='{}_bs={}_opt={}_lr={}'.format(args.exp, batch_size, optimiser, param))
-                network.construct(100, optimiser, param)
+                network.construct(100, optimiser, param, mnist.train.num_examples/batch_size*args.epochs)
 
                 # Train
                 for i in range(args.epochs):
