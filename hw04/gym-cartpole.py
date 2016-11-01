@@ -4,6 +4,7 @@ from __future__ import print_function
 import datetime
 import numpy as np
 import tensorflow as tf
+import os
 
 class Network:
     OBSERVATIONS = 4
@@ -46,8 +47,10 @@ class Network:
             self.summary_writer.add_graph(self.session.graph)
 
     # Save the graph
-    def save(self, path):
-        self.saver.save(self.session, path)
+    def save(self, directory, path):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        self.saver.save(self.session, os.path.join(directory,path))
 
 
 if __name__ == "__main__":
@@ -57,7 +60,7 @@ if __name__ == "__main__":
     # Parse arguments
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--logdir", default="", type=str, help="Logdir name.")
+    parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
     parser.add_argument("--exp", default="1-gym-save", type=str, help="Experiment name.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
@@ -69,4 +72,4 @@ if __name__ == "__main__":
     # TODO: Train the network
 
     # Save the network
-    network.save("1-gym-random")
+    network.save("networks", "1-gym-random")
