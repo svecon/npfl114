@@ -122,8 +122,8 @@ if __name__ == "__main__":
     # Load the data
     from tensorflow.examples.tutorials.mnist import input_data
     
-    for input_dropout_prob in (0.5,0.7,0.8,0.9,1):
-        for hidden_dropout_prob in (0.3,0.4,0.5,0.6,1):
+    for input_dropout_prob in (0.8, 0.9, 1):
+        for hidden_dropout_prob in (0.8, 0.9, 1):
 
             mnist = input_data.read_data_sets("mnist_data/", reshape=False)
 
