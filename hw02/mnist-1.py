@@ -46,7 +46,7 @@ class Network:
 
             elif optimiser_func == 'exponential_decay':
                 # tf.train.exponential_decay(learning_rate, global_step, decay_steps, decay_rate, staircase=False, name=None)
-                learning_rate = tf.train.exponential_decay(learning_rate=optimiser_params[0], self.global_step, max_steps, optimiser_params[1]/optimiser_params[0])
+                learning_rate = tf.train.exponential_decay(optimiser_params[0], self.global_step, max_steps, optimiser_params[1]/optimiser_params[0])
                 optimiser = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
 
             elif optimiser_func == 'MomentumOptimizer':
@@ -136,7 +136,7 @@ if __name__ == "__main__":
         'AdamOptimizer': (0.002,0.001,0.0005),
     }
 
-    for batch_size in [1, 10, 50]:
+    for batch_size in [10, 50]:
         for optimiser, params in optimiserParams.items():
             for param in params:
                 mnist = input_data.read_data_sets("mnist_data/", reshape=False)
