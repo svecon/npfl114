@@ -32,9 +32,10 @@ class Network:
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
                 self.labels = tf.placeholder(tf.int64, [None], name="labels")
 
-            flattened_images = tf_layers.flatten(self.images, scope="preprocessing")
-            hidden_layer = tf_layers.fully_connected(flattened_images, num_outputs=hidden_layer_size, activation_fn=tf.nn.relu, scope="hidden_layer")
-            output_layer = tf_layers.fully_connected(hidden_layer, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
+            hidden_conv1 = tf_layers.convolution2d(self.images, 3, [3, 3], 1)
+            hidden_mp1 = tf_layers.max_pool2d(hidden_conv1, [3, 3], 2)
+            last_layer = tf_layers.flatten(hidden_mp1)
+            output_layer = tf_layers.fully_connected(last_layer, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
             self.predictions = tf.argmax(output_layer, 1)
 
             loss = tf_losses.sparse_softmax_cross_entropy(output_layer, self.labels, scope="loss")
