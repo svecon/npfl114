@@ -125,5 +125,6 @@ if __name__ == "__main__":
             images, labels = mnist.train.next_batch(args.batch_size)
             network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
 
-        network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
-        network.evaluate("test", mnist.test.images, mnist.test.labels, True)
+        dev_acc = network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
+        test_acc = network.evaluate("test", mnist.test.images, mnist.test.labels, True)
+        print("Epoch: {}, dev_acc: {}, test_acc: {}".format(i, dev_acc, test_acc))
