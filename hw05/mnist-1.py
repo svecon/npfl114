@@ -32,9 +32,13 @@ class Network:
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
                 self.labels = tf.placeholder(tf.int64, [None], name="labels")
 
-            hidden_conv1 = tf_layers.convolution2d(self.images, 3, [3, 3], 1)
-            hidden_mp1 = tf_layers.max_pool2d(hidden_conv1, [3, 3], 2)
-            last_layer = tf_layers.flatten(hidden_mp1)
+            hidden_conv11 = tf_layers.convolution2d(self.images, 3, [3, 3], 1)
+            hidden_conv12 = tf_layers.convolution2d(hidden_conv11, 6, [3, 3], 1)
+            hidden_mp1 = tf_layers.max_pool2d(hidden_conv12, [3, 3], 2)
+            hidden_conv21 = tf_layers.convolution2d(hidden_mp1, 9, [3, 3], 1)
+            hidden_conv22 = tf_layers.convolution2d(hidden_conv21, 12, [3, 3], 1)
+            hidden_mp2 = tf_layers.max_pool2d(hidden_conv22, [3, 3], 2)
+            last_layer = tf_layers.flatten(hidden_mp2)
             output_layer = tf_layers.fully_connected(last_layer, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
             self.predictions = tf.argmax(output_layer, 1)
 
