@@ -113,6 +113,7 @@ if __name__ == "__main__":
     parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
     parser.add_argument("--exp", default="1-mnist", type=str, help="Experiment name.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
+    parser.add_argument("--target", default=1.0, type=float, help="Maximum number of threads to use.")
     args = parser.parse_args()
 
     # Load the data
@@ -132,3 +133,6 @@ if __name__ == "__main__":
         dev_acc = network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
         test_acc = network.evaluate("test", mnist.test.images, mnist.test.labels, True)
         print("Epoch: {}, validation: {}, test: {}".format(i, dev_acc, test_acc))
+
+        if args.target < test_acc:
+            break 
