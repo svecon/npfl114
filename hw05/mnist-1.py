@@ -32,14 +32,18 @@ class Network:
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
                 self.labels = tf.placeholder(tf.int64, [None], name="labels")
 
-            hidden_conv11 = tf_layers.convolution2d(self.images, 3, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
+            hidden_conv11 = tf_layers.convolution2d(self.images, 6, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
             hidden_conv12 = tf_layers.convolution2d(hidden_conv11, 6, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
             hidden_mp1 = tf_layers.max_pool2d(hidden_conv12, [3, 3], 2)
-            hidden_conv21 = tf_layers.convolution2d(hidden_mp1, 9, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
+            hidden_conv21 = tf_layers.convolution2d(hidden_mp1, 12, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
             hidden_conv22 = tf_layers.convolution2d(hidden_conv21, 12, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
             hidden_mp2 = tf_layers.max_pool2d(hidden_conv22, [3, 3], 2)
             last_layer = tf_layers.flatten(hidden_mp2)
-            output_layer = tf_layers.fully_connected(last_layer, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
+
+            self.dropout_rate = tf.placeholder(tf.float32, [])
+            input_layer_dropout = tf.nn.dropout(last_layer, self.dropout_rate)
+
+            output_layer = tf_layers.fully_connected(input_layer_dropout, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
             self.predictions = tf.argmax(output_layer, 1)
 
             loss = tf_losses.sparse_softmax_cross_entropy(output_layer, self.labels, scope="loss")
@@ -69,7 +73,7 @@ class Network:
         if (summaries or run_metadata) and not self.summary_writer:
             raise ValueError("Logdir is required for summaries or run_metadata.")
 
-        args = {"feed_dict": {self.images: images, self.labels: labels}}
+        args = {"feed_dict": {self.images: images, self.labels: labels, self.dropout_rate: 0.5}}
         targets = [self.training]
         if summaries:
             targets.append(self.summaries["training"])
@@ -91,7 +95,7 @@ class Network:
         if summaries:
             targets.append(self.summaries[dataset])
 
-        results = self.session.run(targets, {self.images: images, self.labels: labels})
+        results = self.session.run(targets, {self.images: images, self.labels: labels, self.dropout_rate: 1})
         if summaries:
             self.summary_writer.add_summary(results[-1], self.training_step)
         return results[0]
@@ -105,7 +109,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=20, type=int, help="Number of epochs.")
+    parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
     parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
     parser.add_argument("--exp", default="1-mnist", type=str, help="Experiment name.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
@@ -127,4 +131,4 @@ if __name__ == "__main__":
 
         dev_acc = network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
         test_acc = network.evaluate("test", mnist.test.images, mnist.test.labels, True)
-        print("Epoch: {}, dev_acc: {}, test_acc: {}".format(i, dev_acc, test_acc))
+        print("Epoch: {}, validation: {}, test: {}".format(i, dev_acc, test_acc))
