@@ -34,12 +34,12 @@ class Network:
 
             flattened_images = tf_layers.flatten(self.images, scope="preprocessing")
 
-            self.input_layer_dropout_rate = tf.placeholder(tf.float32)
+            self.input_layer_dropout_rate = tf.placeholder(tf.float32, [])
             input_layer_dropout = tf.nn.dropout(flattened_images, self.input_layer_dropout_rate)
             
             hidden_layer = tf_layers.fully_connected(input_layer_dropout, num_outputs=hidden_layer_size, activation_fn=tf.nn.relu, scope="hidden_layer")
             
-            self.hidden_layer_dropout_rate = tf.placeholder(tf.float32)
+            self.hidden_layer_dropout_rate = tf.placeholder(tf.float32, [])
             hidden_layer_dropout = tf.nn.dropout(hidden_layer, self.hidden_layer_dropout_rate)
             
             output_layer = tf_layers.fully_connected(hidden_layer_dropout, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
@@ -122,8 +122,8 @@ if __name__ == "__main__":
     # Load the data
     from tensorflow.examples.tutorials.mnist import input_data
     
-    for input_dropout_prob in (0.5,0.7,0.8,0.9,1):
-        for hidden_dropout_prob in (0.3,0.4,0.5,0.6,1):
+    for input_dropout_prob in (0.8, 0.9, 1):
+        for hidden_dropout_prob in (0.8, 0.9, 1):
 
             mnist = input_data.read_data_sets("mnist_data/", reshape=False)
 

@@ -26,41 +26,29 @@ class Network:
         else:
             self.summary_writer = None
 
-    def construct(self, hidden_layer_size, optimiser_func, optimiser_params, max_steps):
+    def construct(self, hidden_layer_size):
         with self.session.graph.as_default():
             with tf.name_scope("inputs"):
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
                 self.labels = tf.placeholder(tf.int64, [None], name="labels")
 
-            flattened_images = tf_layers.flatten(self.images, scope="preprocessing")
-            hidden_layer = tf_layers.fully_connected(flattened_images, num_outputs=hidden_layer_size, activation_fn=tf.nn.relu, scope="hidden_layer")
-            output_layer = tf_layers.fully_connected(hidden_layer, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
+            hidden_conv11 = tf_layers.convolution2d(self.images, 6, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
+            hidden_conv12 = tf_layers.convolution2d(hidden_conv11, 6, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
+            hidden_mp1 = tf_layers.max_pool2d(hidden_conv12, [3, 3], 2)
+            hidden_conv21 = tf_layers.convolution2d(hidden_mp1, 12, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
+            hidden_conv22 = tf_layers.convolution2d(hidden_conv21, 12, [3, 3], 1, normalizer_fn=tf_layers.batch_norm)
+            hidden_mp2 = tf_layers.max_pool2d(hidden_conv22, [3, 3], 2)
+            last_layer = tf_layers.flatten(hidden_mp2)
+
+            self.dropout_rate = tf.placeholder(tf.float32, [])
+            input_layer_dropout = tf.nn.dropout(last_layer, self.dropout_rate)
+
+            output_layer = tf_layers.fully_connected(input_layer_dropout, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
             self.predictions = tf.argmax(output_layer, 1)
 
             loss = tf_losses.sparse_softmax_cross_entropy(output_layer, self.labels, scope="loss")
             self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
-
-            if optimiser_func == 'GradientDescentOptimizer':
-                # tf.train.GradientDescentOptimizer.__init__(learning_rate, use_locking=False, name='GradientDescent')
-                optimiser = tf.train.GradientDescentOptimizer(learning_rate=optimiser_params)
-
-            elif optimiser_func == 'exponential_decay':
-                # tf.train.exponential_decay(learning_rate, global_step, decay_steps, decay_rate, staircase=False, name=None)
-                learning_rate = tf.train.exponential_decay(optimiser_params[0], self.global_step, max_steps, optimiser_params[1]/optimiser_params[0])
-                optimiser = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-
-            elif optimiser_func == 'MomentumOptimizer':
-                # tf.train.MomentumOptimizer.__init__(learning_rate, momentum, use_locking=False, name='Momentum', use_nesterov=False)
-                optimiser = tf.train.MomentumOptimizer(learning_rate=optimiser_params, momentum=0.9)
-
-            elif optimiser_func == 'AdamOptimizer':
-                # tf.train.AdamOptimizer.__init__(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-08, use_locking=False, name='Adam')
-                optimiser = tf.train.AdamOptimizer(learning_rate=optimiser_params)
-
-            else:
-                raise ValueError('Unexpected optimiser function.')
-
-            self.training = optimiser.minimize(loss, global_step=self.global_step)
+            self.training = tf.train.AdamOptimizer().minimize(loss, global_step=self.global_step)
             self.accuracy = tf_metrics.accuracy(self.predictions, self.labels)
 
             # Summaries
@@ -85,7 +73,7 @@ class Network:
         if (summaries or run_metadata) and not self.summary_writer:
             raise ValueError("Logdir is required for summaries or run_metadata.")
 
-        args = {"feed_dict": {self.images: images, self.labels: labels}}
+        args = {"feed_dict": {self.images: images, self.labels: labels, self.dropout_rate: 0.5}}
         targets = [self.training]
         if summaries:
             targets.append(self.summaries["training"])
@@ -107,7 +95,7 @@ class Network:
         if summaries:
             targets.append(self.summaries[dataset])
 
-        results = self.session.run(targets, {self.images: images, self.labels: labels})
+        results = self.session.run(targets, {self.images: images, self.labels: labels, self.dropout_rate: 1})
         if summaries:
             self.summary_writer.add_summary(results[-1], self.training_step)
         return results[0]
@@ -120,36 +108,31 @@ if __name__ == "__main__":
     # Parse arguments
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", default=20, type=int, help="Number of epochs.")
+    parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=200, type=int, help="Number of epochs.")
     parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
-    parser.add_argument("--exp", default="1-mnist-opt", type=str, help="Experiment name.")
+    parser.add_argument("--exp", default="1-mnist", type=str, help="Experiment name.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
+    parser.add_argument("--target", default=1.0, type=float, help="Maximum number of threads to use.")
     args = parser.parse_args()
 
     # Load the data
     from tensorflow.examples.tutorials.mnist import input_data
+    mnist = input_data.read_data_sets("mnist_data/", reshape=False)
 
-    optimiserParams = {
-        'GradientDescentOptimizer': (0.01,0.001,0.0001),
-        'exponential_decay':  [(0.01,0.001), (0.01,0.0001), (0.001,0.0001)],
-        'MomentumOptimizer': (0.01,0.001,0.0001),
-        'AdamOptimizer': (0.002,0.001,0.0005),
-    }
+    # Construct the network
+    network = Network(threads=args.threads, logdir=args.logdir, expname=args.exp)
+    network.construct(100)
 
-    for batch_size in [10, 50]:
-        for optimiser, params in optimiserParams.items():
-            for param in params:
-                mnist = input_data.read_data_sets("mnist_data/", reshape=False)
+    # Train
+    for i in range(args.epochs):
+        while mnist.train.epochs_completed == i:
+            images, labels = mnist.train.next_batch(args.batch_size)
+            network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
 
-                # Construct the network
-                network = Network(threads=args.threads, logdir=args.logdir, expname='{}_bs={}_opt={}_lr={}'.format(args.exp, batch_size, optimiser, param))
-                network.construct(100, optimiser, param, mnist.train.num_examples/batch_size*args.epochs)
+        dev_acc = network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
+        test_acc = network.evaluate("test", mnist.test.images, mnist.test.labels, True)
+        print("Epoch: {}, validation: {}, test: {}".format(i, dev_acc, test_acc))
 
-                # Train
-                for i in range(args.epochs):
-                    while mnist.train.epochs_completed == i:
-                        images, labels = mnist.train.next_batch(batch_size)
-                        network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
-
-                    network.evaluate("dev", mnist.validation.images, mnist.validation.labels, True)
-                    network.evaluate("test", mnist.test.images, mnist.test.labels, True)
+        if args.target < test_acc:
+            break 
