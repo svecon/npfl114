@@ -35,7 +35,7 @@ class Network:
 
             # JPG loading
             self.jpeg_file = tf.placeholder(tf.string, [])
-            self.jpeg_data = tf.image.resize_image_with_crop_or_pad(tf.image.decode_jpeg(tf.read_file(self.jpeg_file)), self.HEIGHT, self.WIDTH)
+            self.jpeg_data = tf.image.resize_image_with_crop_or_pad(tf.image.decode_jpeg(tf.read_file(self.jpeg_file), channels=3), self.HEIGHT, self.WIDTH)
 
     def load_jpeg(self, jpeg_file):
         return self.session.run(self.jpeg_data, {self.jpeg_file: jpeg_file})
@@ -46,17 +46,23 @@ class Network:
 if __name__ == "__main__":
     # Parse arguments
     import argparse
+    import pandas as pd
+    # from StringIO import StringIO
+    
     parser = argparse.ArgumentParser()
-    parser.add_argument("images", type=str, nargs='+', help="Image files.")
+    # parser.add_argument("images", type=str, nargs='+', help="Image files.")
     parser.add_argument("--checkpoint", default="resnet_v1_50.ckpt", type=str, help="Name of ResNet50 checkpoint.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
+
+    images_test = pd.read_csv('test.txt', delimiter=" ", header=None).values
 
     # Load the network
     network = Network(args.checkpoint, args.threads)
 
     # Process the images
-    for image_file in args.images:
+    for image_file,label in images_test:
+        print(image_file, label)
         image_data = network.load_jpeg(image_file)
         prediction = network.predict(image_data)
         print("Image {}: class {}-{}".format(image_file, prediction, imagenet_classes.imagenet_classes[prediction]))
