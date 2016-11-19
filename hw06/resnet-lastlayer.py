@@ -5,17 +5,20 @@ import datetime
 import numpy as np
 import os
 
+from DataSet import DataSet
+from numpy import genfromtxt
+import pandas as pd
+
 import tensorflow as tf
 import tensorflow.contrib.layers as tf_layers
 import tensorflow.contrib.losses as tf_losses
 import tensorflow.contrib.metrics as tf_metrics
 
 class Network:
-    OBSERVATIONS = 4
-    HIDDEN_SIZE = 10
-    LABELS = 2
+    OBSERVATIONS = 2048
+    LABELS = 50
 
-    def __init__(self, threads=1, logdir=None, expname=None, seed=42):
+    def __init__(self, threads=8, logdir=None, expname=None, seed=42):
         # Create an empty graph and a session
         graph = tf.Graph()
         graph.seed = seed
@@ -34,10 +37,7 @@ class Network:
                 self.observations = tf.placeholder(tf.float32, [None, self.OBSERVATIONS], name="observations")
                 self.labels = tf.placeholder(tf.int64, [None], name="labels")
 
-            hidden_layer1 = tf_layers.fully_connected(self.observations, num_outputs=self.HIDDEN_SIZE, activation_fn=tf.nn.relu, scope="hidden_layer_1")
-            hidden_layer2 = tf_layers.fully_connected(hidden_layer1, num_outputs=self.HIDDEN_SIZE, activation_fn=tf.nn.relu, scope="hidden_layer_2")
-            output_layer = tf_layers.fully_connected(hidden_layer2, num_outputs=self.LABELS, activation_fn=None, scope="output_layer")
-
+            output_layer = tf_layers.fully_connected(self.observations, num_outputs=self.LABELS, activation_fn=None, scope="output_layer_fully")
             self.action = tf.argmax(output_layer, 1)
 
             loss = tf_losses.sparse_softmax_cross_entropy(output_layer, self.labels, scope="loss")
@@ -51,6 +51,8 @@ class Network:
             # Summaries
             self.summaries = {"training": tf.merge_summary([tf.scalar_summary("train/loss", loss),
                                                             tf.scalar_summary("train/accuracy", self.accuracy)])}
+            for dataset in ["dev", "test"]:
+                self.summaries[dataset] = tf.scalar_summary(dataset+"/accuracy", self.accuracy)
 
             # Construct the saver
             tf.add_to_collection("end_points/observations", self.observations)
@@ -88,6 +90,21 @@ class Network:
             self.summary_writer.add_run_metadata(args["run_metadata"], "step{:05}".format(self.training_step - 1))
 
 
+    def evaluate(self, dataset, observations, labels, summaries=False):
+        if summaries and not self.summary_writer:
+            raise ValueError("Logdir is required for summaries.")
+
+        targets = [self.accuracy]
+        if summaries:
+            targets.append(self.summaries[dataset])
+
+        results = self.session.run(targets, {self.observations: observations, self.labels: labels})
+
+        if summaries:
+            self.summary_writer.add_summary(results[-1], self.training_step)
+        return results[0]
+
+
     # Save the graph
     def save(self, directory, path):
         if not os.path.exists(directory):
@@ -103,22 +120,20 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
-    parser.add_argument("--exp", default="1-gym-save", type=str, help="Experiment name.")
+    parser.add_argument("--exp", default="subresnet", type=str, help="Experiment name.")
     parser.add_argument("--threads", default=8, type=int, help="Maximum number of threads to use.")
-    parser.add_argument("--epochs", default=100000, type=int, help="Number of epochs.")
-    parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=1000, type=int, help="Number of epochs.")
+    parser.add_argument("--batch_size", default=100, type=int, help="Batch size.")
     args = parser.parse_args()
 
     # Construct the network
     network = Network(threads=args.threads, logdir=args.logdir, expname=args.exp)
     network.construct()
-
-    # TODO: Train the network
-    from tensorflow.contrib.learn.python.learn.datasets.mnist import DataSet
-    from numpy import genfromtxt
     
-    data = genfromtxt("../labs04/gym-cartpole-data.txt", delimiter=' ')
+    data = pd.read_csv('train.features.csv', index_col=0).values
     traindata = DataSet(data[:,:-1], data[:,-1], reshape=False)
+
+    testdata = pd.read_csv('test.features.csv', index_col=0).values
 
     # Train
     for i in range(args.epochs):
@@ -126,5 +141,8 @@ if __name__ == "__main__":
             observations, labels = traindata.next_batch(args.batch_size)
             network.train(observations, labels, network.training_step % 100 == 0, network.training_step == 0)
 
-    # Save the network
-    network.save("networks", "1-gym-2hidden")
+        accuracy = network.evaluate("dev", testdata[:,:-1], testdata[:,-1], True)
+        print('Accuracy: {}', accuracy)
+
+        # Save the network
+        network.save("networks", "subresnet50-{}".format(i))
