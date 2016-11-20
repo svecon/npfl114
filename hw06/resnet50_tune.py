@@ -5,6 +5,7 @@ from __future__ import print_function
 
 import datetime
 
+import os
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.slim as tf_slim
@@ -38,7 +39,7 @@ class Network:
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 3], name="images")
                 self.labels = tf.placeholder(tf.int64, [None], name="labels")
 
-            with tf_slim.arg_scope(tf_slim.nets.resnet_v1.resnet_arg_scope(is_training=False)):
+            with tf_slim.arg_scope(tf_slim.nets.resnet_v1.resnet_arg_scope(is_training=True)):
                 resnet, _ = tf_slim.nets.resnet_v1.resnet_v1_50(self.images, num_classes=None)
             self.resnetoutput = tf.squeeze(resnet, [1, 2])
             
@@ -46,17 +47,20 @@ class Network:
             self.saver = tf.train.Saver()
             self.saver.restore(self.session, checkpoint)
 
-            learnt_variables = set(tf.all_variables())
-
             # Add more layers
-            output_layer = tf_layers.fully_connected(self.resnetoutput, num_outputs=self.CLASSES, activation_fn=None, scope="output_layer")
+            output_layer = tf_layers.fully_connected(self.resnetoutput, num_outputs=self.CLASSES, activation_fn=None, scope="output_layer_fully")
             self.predictions = tf.argmax(output_layer, 1)
+            
+            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "output_layer_fully")
 
-            train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "output_layer")
+            self.saver2 = tf.train.Saver({"output_layer_fully/weights": train_vars[0],"output_layer_fully/biases": train_vars[1]})
+            self.saver2.restore(self.session, "networks/subresnet50-380")
+
+            learnt_variables = set(tf.all_variables())
 
             loss = tf_losses.sparse_softmax_cross_entropy(output_layer, self.labels, scope="loss")
             self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
-            self.training = tf.train.AdamOptimizer(name='adam').minimize(loss, global_step=self.global_step, var_list=train_vars)
+            self.training = tf.train.AdamOptimizer(name='adam').minimize(loss, global_step=self.global_step)
             self.accuracy = tf_metrics.accuracy(self.predictions, self.labels)
 
             # Summaries
@@ -157,6 +161,9 @@ if __name__ == "__main__":
         np.array(list(map(subcaltech_classes.subcaltech_classes.index, data[:,-1]))),
         reshape=False)
 
+    accuracy = network.evaluate("dev", testdata.images, testdata.labels, True)
+    print('Accuracy: {}', accuracy)
+
     # # Train
     for i in range(args.epochs):
         while traindata.epochs_completed == i:
@@ -168,6 +175,6 @@ if __name__ == "__main__":
         accuracy = network.evaluate("dev", testdata.images, testdata.labels, True)
         print('Accuracy: {}', accuracy)
 
-    # # Save the network
-    # network.save("networks", "subcaltech_nn")
+        # Save the network
+        network.save("networks", "subcaltech_nn_tuned")
 

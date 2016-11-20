@@ -52,6 +52,7 @@ class DataSet(object):
     self._labels = labels
     self._epochs_completed = 0
     self._index_in_epoch = 0
+    self._shuffleData()
 
   @property
   def images(self):
@@ -69,6 +70,13 @@ class DataSet(object):
   def epochs_completed(self):
     return self._epochs_completed
 
+  def _shuffleData(self):
+    # Shuffle the data
+    perm = numpy.arange(self._num_examples)
+    numpy.random.shuffle(perm)
+    self._images = self._images[perm]
+    self._labels = self._labels[perm]
+
   def next_batch(self, batch_size, fake_data=False):
     """Return the next `batch_size` examples from this data set."""
     if fake_data:
@@ -85,11 +93,7 @@ class DataSet(object):
     if self._index_in_epoch > self._num_examples:
       # Finished epoch
       self._epochs_completed += 1
-      # Shuffle the data
-      perm = numpy.arange(self._num_examples)
-      numpy.random.shuffle(perm)
-      self._images = self._images[perm]
-      self._labels = self._labels[perm]
+      self._shuffleData()
       # Start next epoch
       start = 0
       self._index_in_epoch = batch_size
