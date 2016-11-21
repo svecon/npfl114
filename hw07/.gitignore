@@ -1,0 +1,6 @@
+logs/
+networks/
+resnet_v1_50.ckpt
+subcaltech-50/
+*.pyc
+*.features.csv
