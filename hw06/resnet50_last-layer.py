@@ -142,7 +142,7 @@ if __name__ == "__main__":
             network.train(observations, labels, network.training_step % 100 == 0, network.training_step == 0)
 
         accuracy = network.evaluate("dev", testdata[:,:-1], testdata[:,-1], True)
-        print('Accuracy: {}', accuracy)
+        print('Accuracy: {}'.format(i), accuracy)
 
         # Save the network
         network.save("networks", "subresnet50-{}".format(i))

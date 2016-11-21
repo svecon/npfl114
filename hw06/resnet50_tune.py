@@ -22,7 +22,7 @@ class Network:
     HEIGHT = 224
     CLASSES = 50
 
-    def __init__(self, checkpoint, threads, logdir=None):
+    def __init__(self, checkpoint, checkpoint_lastlayer, threads, logdir=None):
         # Create the session
         self.session = tf.Session(graph = tf.Graph(), config=tf.ConfigProto(inter_op_parallelism_threads=threads,
                                                                             intra_op_parallelism_threads=threads))
@@ -54,13 +54,13 @@ class Network:
             train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "output_layer_fully")
 
             self.saver2 = tf.train.Saver({"output_layer_fully/weights": train_vars[0],"output_layer_fully/biases": train_vars[1]})
-            self.saver2.restore(self.session, "networks/subresnet50-380")
+            self.saver2.restore(self.session, checkpoint_lastlayer)
 
             learnt_variables = set(tf.all_variables())
 
             loss = tf_losses.sparse_softmax_cross_entropy(output_layer, self.labels, scope="loss")
             self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
-            self.training = tf.train.AdamOptimizer(name='adam').minimize(loss, global_step=self.global_step)
+            self.training = tf.train.MomentumOptimizer(learning_rate=0.001, momentum=0.9).minimize(loss, global_step=self.global_step)
             self.accuracy = tf_metrics.accuracy(self.predictions, self.labels)
 
             # Summaries
@@ -140,6 +140,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument("images", type=str, nargs='+', help="Image files.")
     parser.add_argument("--checkpoint", default="resnet_v1_50.ckpt", type=str, help="Name of ResNet50 checkpoint.")
+    parser.add_argument("--lastlayer", default="networks/subresnet50-45", type=str, help="Name of Last Layer checkpoint.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
     parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
@@ -147,7 +148,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Load the network
-    network = Network(args.checkpoint, args.threads, logdir=args.logdir)
+    network = Network(args.checkpoint, args.lastlayer, args.threads, logdir=args.logdir)
 
     data = pd.read_csv('train.txt', delimiter=" ", header=None).values
     traindata = DataSet(
@@ -164,17 +165,16 @@ if __name__ == "__main__":
     accuracy = network.evaluate("dev", testdata.images, testdata.labels, True)
     print('Accuracy: {}', accuracy)
 
-    # # Train
+    # Train
     for i in range(args.epochs):
         while traindata.epochs_completed == i:
             images, labels = traindata.next_batch(args.batch_size)
             print('running next batch')
-            print(labels)
             network.train(images, labels, network.training_step % 100 == 0, network.training_step == 0)
 
         accuracy = network.evaluate("dev", testdata.images, testdata.labels, True)
-        print('Accuracy: {}', accuracy)
+        print('Accuracy: {}'.format(i), accuracy)
 
         # Save the network
-        network.save("networks", "subcaltech_nn_tuned")
+        network.save("networks", "subcaltech_nn_tuned-f47-e{}".format(i))
 
