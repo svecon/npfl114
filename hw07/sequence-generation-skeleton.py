@@ -33,7 +33,18 @@ class Network:
 
             self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
 
-            # TODO
+            state = rnn_cell.zero_state(1, dtype=tf.float32)
+            self.sequence = tf.placeholder(tf.float23, [self.TRAIN])
+            for i in range(self.TRAIN):
+            	with tf.variable_scope('lstm', reuse=i>0):
+            		output, state = rnn_cell(tf.reshape(self.sequence[i-1] if i>0 else 0.0, [1,1]), state)
+            		outputs.append(
+            			# tf_layers.fully_connected(output, 1, activation_fn=None)
+            			tf_layers.linear(output, 1)[0,0]
+            		)
+
+            prediction = tf.pack(outputs)
+            loss = tf.reduce_mean(predictions - self.sequence)**2
 
             # Image summaries
             self.image_tag = tf.placeholder(tf.string, [])
