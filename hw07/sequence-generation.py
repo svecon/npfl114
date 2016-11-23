@@ -33,18 +33,26 @@ class Network:
 
             self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
 
+            # Unrolled training cells
+            outputs = []
             state = rnn_cell.zero_state(1, dtype=tf.float32)
-            self.sequence = tf.placeholder(tf.float23, [self.TRAIN])
+            self.sequence = tf.placeholder(tf.float32, [self.TRAIN])
             for i in range(self.TRAIN):
-            	with tf.variable_scope('lstm', reuse=i>0):
-            		output, state = rnn_cell(tf.reshape(self.sequence[i-1] if i>0 else 0.0, [1,1]), state)
-            		outputs.append(
-            			# tf_layers.fully_connected(output, 1, activation_fn=None)
-            			tf_layers.linear(output, 1)[0,0]
-            		)
+                with tf.variable_scope('rnn', reuse=i>0):
+                    seq = self.sequence[i-1] if i>0 else tf.cast(0.0, tf.float32)
+                    output, state = rnn_cell(tf.reshape(seq, [1,1]), state)
+                    outputs.append(tf_layers.linear(output, 1)[0,0])
 
-            prediction = tf.pack(outputs)
-            loss = tf.reduce_mean(predictions - self.sequence)**2
+            # Calculating LOSS
+            loss = tf.reduce_mean(tf.pack(outputs) - self.sequence)**2
+            self.training = tf.train.AdamOptimizer().minimize(loss, global_step=self.global_step)
+
+            # Unrolled prediction cells
+            for i in range(self.TRAIN, self.TRAIN + self.TEST):
+                with tf.variable_scope("rnn", reuse=True):
+                    output, state = rnn_cell(tf.reshape(outputs[i-1], [1,1]), state)
+                    outputs.append(tf_layers.linear(output, 1)[0,0])
+            self.predictions = tf.pack(outputs)
 
             # Image summaries
             self.image_tag = tf.placeholder(tf.string, [])
@@ -59,10 +67,15 @@ class Network:
         return self.session.run(self.global_step)
 
     def train(self, train_sequence):
-        # TODO
+        args = {"feed_dict": {self.sequence: train_sequence}}
+        targets = [self.training]
+        self.session.run(targets, **args)
 
     def predict(self, train_sequence):
-        # TODO
+        args = {"feed_dict": {self.sequence: train_sequence}}
+        targets = [self.predictions]
+        results = self.session.run(targets, **args)
+        return results[0]
 
     def image_summary(self, gold, predictions, epoch):
         min_value = min(np.min(gold), np.min(predictions))
@@ -86,7 +99,7 @@ if __name__ == "__main__":
     # Parse arguments
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", default="international-airline-passengers.tsv", type=str, help="Data file.")
+    parser.add_argument("--data", default="../labs06/international-airline-passengers.tsv", type=str, help="Data file.")
     parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
     parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
     parser.add_argument("--rnn_cell", default="LSTM", type=str, help="RNN cell type.")
