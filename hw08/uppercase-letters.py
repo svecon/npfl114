@@ -7,12 +7,14 @@ import datetime
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as tf_layers
+import tensorflow.contrib.losses as tf_losses
+import tensorflow.contrib.metrics as tf_metrics
 
 class Dataset:
     def __init__(self, filename, alphabet = None):
         # Load the sentences
         sentences = []
-        with open(filename, "rw") as file:
+        with open(filename, "r") as file:
             for line in file:
                 sentences.append(line.rstrip("\r\n"))
 
@@ -44,7 +46,7 @@ class Dataset:
 
         # Compute alphabet
         self._alphabet = [""] * len(alphabet_map)
-        for key, value in alphabet_map.iteritems():
+        for key, value in alphabet_map.items():
             self._alphabet[value] = key
 
         self._permutation = np.random.permutation(len(self._sentences))
@@ -80,7 +82,7 @@ class Dataset:
 
 
 class Network:
-    def __init__(self, alphabet_size, rnn_cell, rnn_cell_dim, logdir, expname, threads=1, seed=42):
+    def __init__(self, alphabet_size, rnn_cell, rnn_cell_dim, embedding_dim, logdir, expname, threads=1, seed=42):
         # Create an empty graph and a session
         graph = tf.Graph()
         graph.seed = seed
@@ -102,14 +104,44 @@ class Network:
             self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
             self.sentences = tf.placeholder(tf.int32, [None, None])
             self.sentence_lens = tf.placeholder(tf.int32, [None])
-            self.labels = tf.placeholder(tf.int64, [None, None])
+            self.labels = tf.placeholder(tf.int64, [None, None]) # (?,?)
 
-            # TODO
-            # accuracy = ...
-            # self.training = ...
+            input_words = tf.one_hot(self.sentences, alphabet_size) # (?,?,62)
+
+            input_words=None
+            if embedding_dim < 1:
+                input_words = tf.one_hot(self.sentences, alphabet_size) # (?,?,62)
+            else:
+                embedding_variables = tf.get_variable("embedding_variables", shape=[alphabet_size, embedding_dim])
+                input_words = tf.nn.embedding_lookup(embedding_variables, self.sentences) # (?,?,embedding_dim)
+
+            (outputs_fw, outputs_bw), _ = tf.nn.bidirectional_dynamic_rnn(
+                rnn_cell,
+                rnn_cell,
+                input_words,
+                sequence_length=self.sentence_lens,
+                dtype=tf.float32
+            ) # (?,?,10) (?,?,10)
+
+            mask = tf.cast(tf.sequence_mask(self.sentence_lens), tf.float32) # (?,?)
+            mask3d = tf.pack(np.repeat(mask, rnn_cell_dim).tolist(), axis=2) # (?,?,10)
+
+            outputs = outputs_fw + outputs_bw # (?,?,10)
+            masked = mask3d * outputs # (?,?,10)
+
+            masked_vec = tf.reshape(masked, [-1, rnn_cell_dim]) # (?,10)
+            output_layer = tf_layers.fully_connected(masked_vec, 2) # (?,2)
+
+            self.predictions = tf.cast(tf.argmax(output_layer, 1), tf.int64) # (?,)
+
+            labels_vec = tf.reshape(self.labels, [-1]) # (?,)
+            loss = tf_losses.sparse_softmax_cross_entropy(output_layer, labels_vec)
+
+            self.training = tf.train.AdamOptimizer().minimize(loss, self.global_step)
+            self.accuracy = tf_metrics.accuracy(self.predictions, labels_vec)
 
             self.dataset_name = tf.placeholder(tf.string, [])
-            self.summary = tf.scalar_summary(self.dataset_name+"/accuracy", accuracy)
+            self.summary = tf.scalar_summary(self.dataset_name+"/accuracy", self.accuracy)
 
             # Initialize variables
             self.session.run(tf.initialize_all_variables())
@@ -119,16 +151,17 @@ class Network:
         return self.session.run(self.global_step)
 
     def train(self, sentences, sentence_lens, labels):
-        _, summary = self.session.run([self.training, self.summary],
+        _, accuracy, summary = self.session.run([self.training, self.accuracy, self.summary],
                                       {self.sentences: sentences, self.sentence_lens: sentence_lens,
                                        self.labels: labels, self.dataset_name: "train"})
         self.summary_writer.add_summary(summary, self.training_step)
+        return accuracy
 
     def evaluate(self, sentences, sentence_lens, labels, dataset_name):
-        summary = self.session.run(self.summary, {self.sentences: sentences, self.sentence_lens: sentence_lens,
+        accuracy, summary = self.session.run([self.accuracy, self.summary], {self.sentences: sentences, self.sentence_lens: sentence_lens,
                                                   self.labels: labels, self.dataset_name: dataset_name})
         self.summary_writer.add_summary(summary, self.training_step)
-
+        return accuracy
 
 if __name__ == "__main__":
     # Fix random seed
@@ -138,9 +171,10 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
-    parser.add_argument("--data_train", default="en-ud-train.txt", type=str, help="Training data file.")
-    parser.add_argument("--data_dev", default="en-ud-dev.txt", type=str, help="Development data file.")
-    parser.add_argument("--data_test", default="en-ud-test.txt", type=str, help="Testing data file.")
+    parser.add_argument("--embedding", default=150, type=int, help="Embedding dimension. One hot is used if <1.")
+    parser.add_argument("--data_train", default="../labs06/en-ud-train.txt", type=str, help="Training data file.")
+    parser.add_argument("--data_dev", default="../labs06/en-ud-dev.txt", type=str, help="Development data file.")
+    parser.add_argument("--data_test", default="../labs06/en-ud-test.txt", type=str, help="Testing data file.")
     parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
     parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
     parser.add_argument("--rnn_cell", default="LSTM", type=str, help="RNN cell type.")
@@ -154,15 +188,30 @@ if __name__ == "__main__":
     data_test = Dataset(args.data_test, data_train.alphabet)
 
     # Construct the network
-    expname = "uppercase-letters-{}{}-bs{}-epochs{}".format(args.rnn_cell, args.rnn_cell_dim, args.batch_size, args.epochs)
-    network = Network(alphabet_size=len(data_train.alphabet), rnn_cell=args.rnn_cell, rnn_cell_dim=args.rnn_cell_dim, logdir=args.logdir, expname=expname, threads=args.threads)
+    expname = "uppercase-letters_rnn={}_dim={}_embedding={}_bs={}_epochs{}".format(
+        args.rnn_cell,
+        args.rnn_cell_dim,
+        "onehot" if args.embedding < 1 else args.embedding,
+        args.batch_size,
+        args.epochs
+    )
+    network = Network(
+        alphabet_size=len(data_train.alphabet),
+        rnn_cell=args.rnn_cell,
+        rnn_cell_dim=args.rnn_cell_dim,
+        embedding_dim=args.embedding,
+        logdir=args.logdir,
+        expname=expname,
+        threads=args.threads
+    )
 
     # Train
     for epoch in range(args.epochs):
-        print("Training epoch {}".format(epoch))
         while not data_train.epoch_finished():
             sentences, sentence_lens, labels = data_train.next_batch(args.batch_size)
             network.train(sentences, sentence_lens, labels)
 
-        network.evaluate(data_dev.sentences, data_dev.sentence_lens, data_dev.labels, "dev")
-        network.evaluate(data_test.sentences, data_test.sentence_lens, data_test.labels, "test")
+        dev_accuracy = network.evaluate(data_dev.sentences, data_dev.sentence_lens, data_dev.labels, "dev")
+        test_accuracy = network.evaluate(data_test.sentences, data_test.sentence_lens, data_test.labels, "test")
+
+    print("{}: dev_accuracy:{}, test_accuracy:{}".format(expname, dev_accuracy, test_accuracy))
