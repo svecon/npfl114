@@ -1,0 +1,5 @@
+data/
+logs/
+networks/
+*.csv
+morpho_data.zip

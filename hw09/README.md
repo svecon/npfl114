@@ -1,0 +1,14 @@
+# HW-09 tagger (1-7pts, due Dec 12)
+
+Implement network performing part-of-speech tagging for Czech and English. The data (and word embeddings precomputed using word2vec) are available here http://ufal.mff.cuni.cz/~straka/courses/npfl114/2016/morpho_data.zip. The files are stored in vertical format – each word is on a separate line, with empty line denoting end of sentence. Each word line contain three tab-separated values: word form, lemma and tag (you can ignore the lemmas in this task). However, note that only word forms are available in the test data. You can load the dataset using the labs08/morpho_dataset.py module.
+
+This task has several subtasks, you can solve only some of them if you want. The network in each subtask is a bidirectional GRU (with dimension 100), only the word embeddings (always with dimension 100) differ:
+
+- learned_we (1 point): use randomly initialized word embeddings, which you update during training
+- updated_pretrained_we (1 point): use pretrained word embeddings, which you further update during training. The pretrained embeddings are in the original data and can be loaded using the labs08/word_embeddings.py module.
+- only_pretrained_we (1 point): use pretrained word embeddings, which you do not update during training
+- char_rnn (1 point): use character-level embeddings computed using bidirectional GRU on the word letters (beginning-of-word and end-of-word characters are not needed)
+- char_conv (1 points): compute word embeddings as convolution of filters followed by a max-pooling layer (beginning-of-word and end-of-word characters are needed), using 25 filters of width 2, 25 filters of width 3, 25 filters of width 4 and 25 filters of width 5
+- charagram (2 point): compute word embeddings as average of embeddings of character n-grams present in the word (beginning-of-word and end-of-word characters are needed), for n in (2,3,4)
+- English competition (1-3): using any deep learning approach which uses only the data in the provided archive, try achieving highest accuracy on English testing data. The solution to this subtask is both a source code of you network and annotated testing data, which will be evaluated using the labs08/morpho_evaluate.py script. The points will be awarded according to the accuracy reached – three best submissions get 3 points, next three best submissions get 2 points and next three submissions get 1 point
+- Czech competition (1-3): using any deep learning approach which uses only the data in the provided archive, try achieving highest accuracy on Czech testing data. The solution to this subtask is both a source code of you network and annotated testing data, which will be evaluated using the labs08/morpho_evaluate.py script. The points will be awarded according to the accuracy reached – three best submissions get 3 points, next three best submissions get 2 points and next three submissions get 1 point
