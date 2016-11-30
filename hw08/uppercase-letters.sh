@@ -2,7 +2,7 @@
 set -e
 for rnn in LSTM GRU
 do
-	for dim in 8 10 12
+	for dim in 10 20 30 50
     do
     	for embedding in 0 100 150 200
         do
