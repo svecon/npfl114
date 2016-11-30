@@ -123,18 +123,18 @@ class Network:
                 dtype=tf.float32
             ) # (?,?,10) (?,?,10)
 
-            mask = tf.cast(tf.sequence_mask(self.sentence_lens), tf.float32) # (?,?)
+            mask = tf.sequence_mask(self.sentence_lens) # (?,?)
             mask3d = tf.pack(np.repeat(mask, rnn_cell_dim).tolist(), axis=2) # (?,?,10)
 
             outputs = outputs_fw + outputs_bw # (?,?,10)
-            masked = mask3d * outputs # (?,?,10)
+            masked = tf.boolean_mask(outputs, mask3d) # (?,)
 
-            masked_vec = tf.reshape(masked, [-1, rnn_cell_dim]) # (?,10)
-            output_layer = tf_layers.fully_connected(masked_vec, 2) # (?,2)
+            masked_mat = tf.reshape(masked, [-1, rnn_cell_dim])
+            output_layer = tf_layers.fully_connected(masked_mat, 2) # (?,2)
 
             self.predictions = tf.cast(tf.argmax(output_layer, 1), tf.int64) # (?,)
 
-            labels_vec = tf.reshape(self.labels, [-1]) # (?,)
+            labels_vec = tf.boolean_mask(self.labels, mask) # (?,)
             loss = tf_losses.sparse_softmax_cross_entropy(output_layer, labels_vec)
 
             self.training = tf.train.AdamOptimizer().minimize(loss, self.global_step)
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
     parser.add_argument("--logdir", default="logs", type=str, help="Logdir name.")
     parser.add_argument("--rnn_cell", default="LSTM", type=str, help="RNN cell type.")
-    parser.add_argument("--rnn_cell_dim", default=10, type=int, help="RNN cell dimension.")
+    parser.add_argument("--rnn_cell_dim", default=50, type=int, help="RNN cell dimension.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
 
