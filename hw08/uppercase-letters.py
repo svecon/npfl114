@@ -122,15 +122,12 @@ class Network:
                 sequence_length=self.sentence_lens,
                 dtype=tf.float32
             ) # (?,?,10) (?,?,10)
+            outputs = outputs_fw + outputs_bw # (?,?,10)
 
             mask = tf.sequence_mask(self.sentence_lens) # (?,?)
-            mask3d = tf.pack(np.repeat(mask, rnn_cell_dim).tolist(), axis=2) # (?,?,10)
+            masked = tf.boolean_mask(outputs, mask) # (?,)
 
-            outputs = outputs_fw + outputs_bw # (?,?,10)
-            masked = tf.boolean_mask(outputs, mask3d) # (?,)
-
-            masked_mat = tf.reshape(masked, [-1, rnn_cell_dim])
-            output_layer = tf_layers.fully_connected(masked_mat, 2) # (?,2)
+            output_layer = tf_layers.fully_connected(masked, 2) # (?,2)
 
             self.predictions = tf.cast(tf.argmax(output_layer, 1), tf.int64) # (?,)
 
