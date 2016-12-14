@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import environment_discrete
 import numpy as np
-from random import random, randint
 
 if __name__ == "__main__":
     # Fix random seed
@@ -40,8 +39,8 @@ if __name__ == "__main__":
             if args.render_each and episode > 0 and episode % args.render_each == 0:
                 env.render()
 
-            if random() < epsilon:
-                action = randint(0, env.actions-1)
+            if np.random.random() < epsilon:
+                action = np.random.randint(0, env.actions)
             else:
                 action = np.argmax(Q[state])
 
