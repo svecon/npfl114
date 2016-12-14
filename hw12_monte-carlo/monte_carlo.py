@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import environment_discrete
 import numpy as np
+from random import random, randint
 
 if __name__ == "__main__":
     # Fix random seed
@@ -39,8 +40,10 @@ if __name__ == "__main__":
             if args.render_each and episode > 0 and episode % args.render_each == 0:
                 env.render()
 
-            # TODO: compute action using epsilon-greedy policy
-            # action = ...
+            if random() < epsilon:
+                action = randint(0, env.actions-1)
+            else:
+                action = np.argmax(Q[state])
 
             next_state, reward, done, _ = env.step(action)
 
@@ -53,9 +56,14 @@ if __name__ == "__main__":
             if done:
                 break
 
-        # TODO: sum and discount rewards
-
-        # TODO: update Q and C
+        # Update Q and C
+        for i, (state, action, reward) in enumerate(zip(states, actions, rewards)):
+            if C[state][action]==0:
+                Q[state][action] = reward
+            else:
+                g = sum([ x*(args.gamma**j) for j,x in enumerate(rewards[i:]) ])
+                Q[state][action] = Q[state][action] + (1 / (C[state][action]+1) * (g - Q[state][action]))
+            C[state][action] += 1
 
         episode_rewards.append(total_reward)
         episode_lengths.append(t)
