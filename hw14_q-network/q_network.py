@@ -18,15 +18,19 @@ class QNetwork:
         # Construct the graph
         with self.session.graph.as_default():
             self.observations = tf.placeholder(tf.float32, [None, observations])
-
-            # TODO: define the following, using q_network
-            # self.q = ...
-            # self.action = ... [best action]
-
             self.target_q = tf.placeholder(tf.float32, [None, actions])
-            # TODO: compute loss using MSE
-            # loss = ...
-            # self.training = ... [use learning_rate]
+
+            self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
+
+            # Using q_network
+            self.q = q_network(self.observations)
+            self.action = tf.argmax(self.q, 1) # [best action]
+
+            # Compute loss using MSE
+            # loss= (r + γ*max_a'Q(s',a';θ) - Q(s,a;θ))^2
+            loss = tf.reduce_mean(tf.square(self.q - self.target_q))
+            adam = tf.train.AdamOptimizer(learning_rate=learning_rate)
+            self.training = adam.minimize(loss, global_step=self.global_step)
 
             # Initialize variables
             self.session.run(tf.initialize_all_variables())
@@ -55,7 +59,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--alpha", default=0.1, type=float, help="Learning rate.")
     parser.add_argument("--epsilon", default=0.5, type=float, help="Epsilon.")
-    parser.add_argument("--epsilon_final", default=0.01, type=float, help="Epsilon decay rate.")
+    parser.add_argument("--epsilon_decay", default=0.0001, type=float, help="Epsilon decay rate.")
     parser.add_argument("--gamma", default=1.0, type=float, help="Discounting factor.")
     args = parser.parse_args()
 
@@ -73,6 +77,7 @@ if __name__ == "__main__":
                   learning_rate=args.alpha, threads=args.threads)
 
     epsilon = args.epsilon
+    gamma = args.gamma
     episode_rewards, episode_lengths = [], []
     for episode in range(args.episodes):
         # Perform episode
@@ -82,17 +87,24 @@ if __name__ == "__main__":
             if args.render_each and episode > 0 and episode % args.render_each == 0:
                 env.render()
 
-            # TODO: predict action (using epsion-greedy policy) and compute q_values using qn.predict
-            # action = ...
-            # q_values = ...
+            # Predict action (using epsion-greedy policy) and compute q_values using qn.predict
+            action, q_values = qn.predict([observation])
+            action = action[0]
+            q_values = q_values[0]
+            
+            if np.random.random() < epsilon:
+                action = np.random.randint(0, env.actions)
 
             next_observation, reward, done, _ = env.step(action)
             total_reward += reward
 
-            # TODO: compute next_q_values for next_observation
-            # TODO: compute updates to q_values using Q_learning
-            # next_q_values = ...
-            # target_q_values = ...
+            # Compute next_q_values for next_observation
+            _, next_q_values = qn.predict([next_observation])
+            next_q_values = next_q_values[0]
+
+            # Compute updates to q_values using Q_learning
+            target_q_values = q_values
+            target_q_values[action] = reward + gamma * np.max(next_q_values)
 
             # Train the QNetwork using qn.train
             qn.train([observation], [target_q_values])
@@ -107,5 +119,5 @@ if __name__ == "__main__":
             print("Episode {}, mean 100-episode reward {}, mean 100-episode length {}, epsilon {}.".format(
                 episode + 1, np.mean(episode_rewards[-100:]), np.mean(episode_lengths[-100:]), epsilon))
 
-        if args.epsilon_final:
-            epsilon = np.exp(np.interp(episode + 1, [0, args.episodes], [np.log(args.epsilon), np.log(args.epsilon_final)]))
+        if args.epsilon_decay:
+            epsilon = np.exp(np.interp(episode + 1, [0, args.episodes], [np.log(args.epsilon), np.log(args.epsilon_decay)]))
