@@ -52,14 +52,14 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", default="Taxi-v1", type=str, help="Name of the environment.")
-    parser.add_argument("--episodes", default=1000, type=int, help="Episodes in a batch.")
-    parser.add_argument("--max_steps", default=500, type=int, help="Maximum number of steps.")
+    parser.add_argument("--episodes", default=3000, type=int, help="Episodes in a batch.")
+    parser.add_argument("--max_steps", default=1000, type=int, help="Maximum number of steps.")
     parser.add_argument("--render_each", default=0, type=int, help="Render some episodes.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
 
     parser.add_argument("--alpha", default=0.1, type=float, help="Learning rate.")
     parser.add_argument("--epsilon", default=0.5, type=float, help="Epsilon.")
-    parser.add_argument("--epsilon_decay", default=0.0001, type=float, help="Epsilon decay rate.")
+    parser.add_argument("--epsilon_decay", default=0.00001, type=float, help="Epsilon decay rate.")
     parser.add_argument("--gamma", default=1.0, type=float, help="Discounting factor.")
     args = parser.parse_args()
 
