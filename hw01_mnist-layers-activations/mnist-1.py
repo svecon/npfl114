@@ -139,7 +139,7 @@ if __name__ == "__main__":
                 	bestNetworkAccuracy = accuracy
                 	bestNetwork = network
 
-    print('Best hyperparams are: activation={} hidden={}'.format(activationFn, numberOfHidden)
-    print('Validation accuracy: {}', bestNetworkAccuracy)
+    print('Best hyperparams are: activation={} hidden={}'.format(activationFn, numberOfHidden))
+    print('Validation accuracy: {}'.format(bestNetworkAccuracy))
     testAccuracy = bestNetwork.evaluate("test", mnist.test.images, mnist.test.labels, True)
-    print('Test accuracy: {}', testAccuracy)
+    print('Test accuracy: {}'.format(testAccuracy))
