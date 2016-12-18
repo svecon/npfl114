@@ -57,11 +57,11 @@ if __name__ == "__main__":
 
         # Update Q and C
         for i, (state, action, reward) in enumerate(zip(states, actions, rewards)):
+            g = sum([ x*(args.gamma**j) for j,x in enumerate(rewards[i:]) ]) # this could take O(n) instead of O(n^2) if the outer for loop was reversed
             if C[state][action]==0:
-                Q[state][action] = reward
+                Q[state][action] = g
             else:
-                g = sum([ x*(args.gamma**j) for j,x in enumerate(rewards[i:]) ])
-                Q[state][action] = Q[state][action] + (1 / (C[state][action]+1) * (g - Q[state][action]))
+                Q[state][action] = Q[state][action] + (1.0 / C[state][action]) * (g - Q[state][action])
             C[state][action] += 1
 
         episode_rewards.append(total_reward)
