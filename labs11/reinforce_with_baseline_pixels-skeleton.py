@@ -2,13 +2,13 @@
 from __future__ import division
 from __future__ import print_function
 
-import environment_continuous
+import environment_pixels
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as tf_layers
 
 class PolicyGradientWithBaseline:
-    def __init__(self, observations, policy_and_value_network, learning_rate, threads=1, seed=42):
+    def __init__(self, observation_shape, policy_and_value_network, learning_rate, threads=1, seed=42):
         # Create an empty graph and a session
         graph = tf.Graph()
         graph.seed = seed
@@ -17,7 +17,7 @@ class PolicyGradientWithBaseline:
 
         # Construct the graph
         with self.session.graph.as_default():
-            self.observations = tf.placeholder(tf.float32, [None, observations])
+            self.observations = tf.placeholder(tf.float32, [None] + observation_shape)
             # TODO: define the following, using policy_and_value_network
             # logits = ...
             # self.value = ...
@@ -53,19 +53,18 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", default="CartPole-v1", type=str, help="Name of the environment.")
-    parser.add_argument("--episodes", default=1000, type=int, help="Episodes in a batch.")
+    parser.add_argument("--episodes", default=100000, type=int, help="Episodes in a batch.")
     parser.add_argument("--max_steps", default=500, type=int, help="Maximum number of steps.")
     parser.add_argument("--render_each", default=0, type=int, help="Render some episodes.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
 
-    parser.add_argument("--alpha", default=0.01, type=float, help="Learning rate.")
+    parser.add_argument("--alpha", default=0.001, type=float, help="Learning rate.")
     parser.add_argument("--gamma", default=1.0, type=float, help="Discounting factor.")
     parser.add_argument("--batch_size", default=1, type=int, help="Number of episodes to train on.")
-    parser.add_argument("--hidden_layer", default=20, type=int, help="Size of hidden layer.")
     args = parser.parse_args()
 
     # Create the environment
-    env = environment_continuous.EnvironmentContinuous(args.env)
+    env = environment_pixels.EnvironmentPixels(args.env)
     if args.render_each:
         # Because of low TLS limit, load OpenGL before TensorFlow
         env.reset()
@@ -73,14 +72,18 @@ if __name__ == "__main__":
 
     # Create policy and value network
     def policy_and_value_network(observations):
-        # TODO: return logits, value
-        # logits are computed from observations using a NN with a single hidden layer of size args.hidden_layer and output layer of size env.actions
-        # value is computed from observations using a NN with another single hidden layer of size args.hidden_layer and one output
-        # logits = ...
-        # value = ...
+        # TODO: Baseline network, used in (Mnih et al., 2016)
+        conv = tf_layers.convolution2d(observations, 16, 8, 4)
+        conv = tf_layers.convolution2d(conv, 32, 4, 2)
+        conv = tf_layers.flatten(conv)
+        hidden_layer = tf_layers.fully_connected(conv, 128)
+        logits = tf_layers.linear(hidden_layer, env.actions)
+        value = tf_layers.linear(hidden_layer, 1)
+        # TODO: If you do not want to use baseline, uncomment the next line
+#         value = tf.zeros([tf.shape(observations)[0], 1])
         return logits, value
 
-    pg = PolicyGradientWithBaseline(observations=env.observations, policy_and_value_network=policy_and_value_network,
+    pg = PolicyGradientWithBaseline(observation_shape=env.observations, policy_and_value_network=policy_and_value_network,
                                     learning_rate=args.alpha, threads=args.threads)
 
     episode_returns, episode_lengths = [], []
@@ -95,7 +98,7 @@ if __name__ == "__main__":
                 if args.render_each and episode > 0 and episode % args.render_each == 0:
                     env.render()
 
-                # TODO: compute probabilities using pg.predict, and choose action according to the probabilities
+                # TODO: compute probabilities and value function using pg.predict, and choose action according to the probabilities
                 # probabilities = ...
                 # action = ...
 
