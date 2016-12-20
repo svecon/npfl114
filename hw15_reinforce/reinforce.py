@@ -6,6 +6,7 @@ import environment_continuous
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as tf_layers
+import tensorflow.contrib.losses as tf_losses
 
 class PolicyGradient:
     def __init__(self, observations, policy_network, learning_rate, threads=1, seed=42):
@@ -18,19 +19,22 @@ class PolicyGradient:
         # Construct the graph
         with self.session.graph.as_default():
             self.observations = tf.placeholder(tf.float32, [None, observations])
-            # TODO: define the following, using policy_network
-            # logits = ...
-            # self.probabilities = ... [probabilities of all actions]
+            self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
+
+            # Define logits and probabilities, using policy_network
+            logits = policy_network(self.observations)
+            self.probabilities = tf.nn.softmax(logits, name='probabilities')
 
             self.chosen_actions = tf.placeholder(tf.int32, [None])
             self.rewards = tf.placeholder(tf.float32, [None])
 
-            # TODO: compute loss, as cross_entropy between logits and chosen_actions, multiplying it by self.rewards
-            # loss = ...
-            # self.training = ... [use learning_rate]
+            # Compute loss, as cross_entropy between logits and chosen_actions, multiplying it by self.rewards
+            loss = self.rewards*tf_losses.sparse_softmax_cross_entropy(logits, self.chosen_actions, scope="loss")
+            adam = tf.train.AdamOptimizer(learning_rate=learning_rate)
+            self.training = adam.minimize(loss, global_step=self.global_step)
 
             # Initialize variables
-            self.session.run(tf.initialize_all_variables())
+            self.session.run(tf.global_variables_initializer())
 
     def predict(self, observations):
         return self.session.run(self.probabilities,
@@ -87,9 +91,9 @@ if __name__ == "__main__":
                 if args.render_each and episode > 0 and episode % args.render_each == 0:
                     env.render()
 
-                # TODO: predict action, using pg.predict and choosing action according to the probabilities
-                # probabilities = ...
-                # action = ...
+                # Predict action, using pg.predict and choosing action according to the probabilities
+                [probabilities] = pg.predict([observation])
+                action = np.random.choice(np.arange(len(probabilities)), p=probabilities)
 
                 observations.append(observation)
                 actions.append(action)
@@ -103,7 +107,9 @@ if __name__ == "__main__":
                 if done:
                     break
 
-            # TODO: sum and discount rewards, only the last t of them
+            # Sum and discount rewards, only the last t of them
+            for i in range(-1-1, -t-1, -1):
+                rewards[i] += args.gamma*rewards[i+1]
 
             episode_rewards.append(total_reward)
             episode_lengths.append(t)
