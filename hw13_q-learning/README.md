@@ -1,4 +1,4 @@
-# HW-12 q_learning (2pts, due Jan 02)
+# HW-13 q_learning (2pts, due Jan 02)
 
 Implement Q-learning algorithm. Start with the labs10/q_learning-skeleton.py module.
 

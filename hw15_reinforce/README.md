@@ -1,4 +1,4 @@
-# HW-12 reinforce (2pts, due Jan 09)
+# HW-15 reinforce (2pts, due Jan 09)
 
 Implement REINFORCE algorithm, representing a policy using a neural network with a hidden layer. Start with the labs10/reinforce-skeleton.py module.
 
