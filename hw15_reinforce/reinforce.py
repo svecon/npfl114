@@ -6,7 +6,6 @@ import environment_continuous
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as tf_layers
-import tensorflow.contrib.losses as tf_losses
 
 class PolicyGradient:
     def __init__(self, observations, policy_network, learning_rate, threads=1, seed=42):
