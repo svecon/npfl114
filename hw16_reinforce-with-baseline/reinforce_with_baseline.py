@@ -28,13 +28,8 @@ class PolicyGradientWithBaseline:
 
             # Compute loss of both the policy and value
             # loss_policy = cross_entropy between logits and chosen_actions, multiplied by (self.returns - tf.stop_gradient(self.value))
-            # @WHY this works without stop_gradient as well? What's the intended purpose?
             relative_returns = tf.sub(self.returns, tf.stop_gradient(self.value))
-            # relative_returns = tf.sub(self.returns, self.value)
-
-            # @WHY this trains faster without the final reduce_mean?
-            # loss_policy = tf.reduce_mean(tf.mul(tf.nn.sparse_softmax_cross_entropy_with_logits(logits, self.chosen_actions), relative_returns))
-            loss_policy = tf.mul(tf.nn.sparse_softmax_cross_entropy_with_logits(logits, self.chosen_actions), relative_returns)
+            loss_policy = tf.reduce_mean(tf.mul(tf.nn.sparse_softmax_cross_entropy_with_logits(logits, self.chosen_actions), relative_returns))
 
             # loss_value = MSE of self.returns and self.value
             loss_value = tf.reduce_mean(tf.square(tf.sub(self.returns, self.value)))
@@ -69,9 +64,9 @@ if __name__ == "__main__":
     parser.add_argument("--render_each", default=0, type=int, help="Render some episodes.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
 
-    parser.add_argument("--alpha", default=0.001, type=float, help="Learning rate.")
+    parser.add_argument("--alpha", default=0.01, type=float, help="Learning rate.")
     parser.add_argument("--gamma", default=1.0, type=float, help="Discounting factor.")
-    parser.add_argument("--batch_size", default=1, type=int, help="Number of episodes to train on.")
+    parser.add_argument("--batch_size", default=5, type=int, help="Number of episodes to train on.")
     parser.add_argument("--hidden_layer", default=20, type=int, help="Size of hidden layer.")
     args = parser.parse_args()
 
