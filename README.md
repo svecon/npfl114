@@ -2,3 +2,5 @@
 
 This repository contains materials to the
 [Deep Learning (ÚFAL course NPFL114)](http://ufal.mff.cuni.cz/courses/npfl114/current).
+
+# Tensorflow version: 0.12
