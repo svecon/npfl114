@@ -26,7 +26,7 @@ class Network:
         else:
             self.summary_writer = None
 
-    def construct(self, hidden_layer_size):
+    def construct(self):
         with self.session.graph.as_default():
             with tf.name_scope("inputs"):
                 self.images = tf.placeholder(tf.float32, [None, self.WIDTH, self.HEIGHT, 1], name="images")
@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
     # Construct the network
     network = Network(threads=args.threads, logdir=args.logdir, expname=args.exp)
-    network.construct(100)
+    network.construct()
 
     # Train
     for i in range(args.epochs):
